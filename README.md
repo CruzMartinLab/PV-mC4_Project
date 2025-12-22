@@ -9,6 +9,16 @@ The workflow integrates:
 
 ---
 
+## Methodological Background and References
+
+The analysis pipeline implemented in this repository is based on the reference profile–based deconvolution framework described by Marquez-Galera et al. (2022), which leverages publicly available single-cell RNA-seq datasets to interpret cell-type–specific contributions to gene expression signatures derived from bulk-tissue RNA-seq. In this approach, differentially expressed gene (DEG) lists obtained from bulk RNA-seq are projected onto a curated scRNA-seq reference, and linear dimensionality reduction together with correlation-based clustering is used to identify cell-type–specific gene modules embedded within bulk transcriptional signatures :contentReference[oaicite:0]{index=0}.
+
+This strategy was originally applied to dissect sublayer- and cell-type–specific transcriptional changes in the hippocampal CA1 region under physiological and epileptic conditions, revealing that bulk RNA-seq signatures reflect a combination of cell-type-specific expression programs and changes in cellular composition (Cid et al., 2021). In particular, this work demonstrated that reactive microglial and glial gene signatures can be unmasked by integrating bulk RNA-seq DEGs with scRNA-seq reference data, highlighting the importance of cellular heterogeneity in the interpretation of bulk transcriptomic analyses.
+
+The present implementation adapts this protocol to cortical bulk RNA-seq data, following the same conceptual framework while allowing flexible subsetting of the scRNA-seq reference and dynamic visualization of cell-type-specific DEG signatures. This pipeline is intended for qualitative deconvolution and hypothesis generation rather than quantitative estimation of cell-type proportions, consistent with the scope and limitations discussed in the original publications.
+
+---
+
 ## Overview of the Analysis Pipeline
 
 The analysis is organized into four main steps:
