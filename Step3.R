@@ -25,9 +25,10 @@ table(sc_data$subclass_label)
 # These region labels correspond to neocortical areas
 # present in the Allen Brain Atlas taxonomy.
 cortex_regions <- c(
-  "VISp", "ALM", "SSp", "MOp", "ACA", "PL-ILA",
-  "ORB", "SSs", "RSP", "AI", "TEa-PERI-ECT",
-  "RSPv", "PTLp", "AUD", "GU", "VIS"
+  "ACA", "AI", "ALM", "AUD", "GU",
+  "MOp", "ORB", "PL-ILA", "PTLp",
+  "RSP", "RSPv", "SSp", "SSs",
+  "VIS", "VISp", "TEa-PERI-ECT"
 )
 
 # Strict anatomical subsetting:
@@ -42,31 +43,40 @@ sc_data <- subset(
 # ----------------------------------------------------------
 # 3. Remove non-cortical / hippocampal-related subclasses
 # ----------------------------------------------------------
-# This secondary safeguard removes hippocampal or
-# non-isocortical populations that may persist due to
-# annotation overlap or metadata ambiguity.
-subclasses_to_remove <- c(
-  "",
-  "CA1-ProS", "CA2", "CA3", "DG",
-  "SUB", "SUB-ProS", "NP SUB",
-  "CLA", "NP"
+# This secondary safeguard removes hippocampal,
+# parahippocampal, and other non-isocortical populations
+# that may persist due to annotation overlap.
+exclude_patterns <- c(
+  "ENT",   # entorhinal / allocortex
+  "PPP",   # parasubiculum / postsubiculum
+  "RHP",   # retrohippocampal
+  "SUB",   # subiculum
+  "CA",    # hippocampal CA fields
+  "DG",    # dentate gyrus
+  "CLA",   # claustrum
+  "^NP"    # non-projecting / non-cortical
+)
+
+keep_cells <- !Reduce(
+  `|`,
+  lapply(
+    exclude_patterns,
+    function(p) grepl(p, sc_data$subclass_label)
+  )
 )
 
 sc_data <- subset(
   x = sc_data,
-  subset = !(subclass_label %in% subclasses_to_remove)
+  cells = colnames(sc_data)[keep_cells]
 )
 
 
 # ----------------------------------------------------------
 # 4. Set and clean cell identity labels
 # ----------------------------------------------------------
-# Drop unused factor levels created by subsetting.
-sc_data$subclass_label <- droplevels(factor(sc_data$subclass_label))
-
-# Set subclass labels as the active identity class.
-# This allows easy grouping, coloring, and downstream analyses.
-Idents(sc_data) <- "subclass_label"
+# Convert subclass labels to factors and drop unused levels.
+Idents(sc_data) <- factor(sc_data$subclass_label)
+Idents(sc_data) <- droplevels(Idents(sc_data))
 
 # Reorder identity levels alphabetically for consistency
 # across plots and reproducibility across sessions.
@@ -75,34 +85,46 @@ Idents(sc_data) <- factor(
   levels = sort(levels(Idents(sc_data)))
 )
 
+# Keep metadata synchronized with identities
+sc_data$subclass_label <- Idents(sc_data)
+
 
 # ----------------------------------------------------------
 # 5. Normalize and preprocess gene expression data
 # ----------------------------------------------------------
-# Normalize raw UMI counts using log normalization.
+# Normalize raw counts using log normalization.
 sc_data <- NormalizeData(
   sc_data,
   normalization.method = "LogNormalize",
   scale.factor = 10000
 )
 
-# Identify highly variable genes using variance-stabilizing
-# transformation (VST).
-sc_data <- FindVariableFeatures(
-  sc_data,
-  selection.method = "vst",
-  nfeatures = 2000
-)
+# ----------------------------------------------------------
+# IMPORTANT MODIFICATION:
+# Use ALL genes as variable features (no HVG restriction)
+# ----------------------------------------------------------
+VariableFeatures(sc_data) <- rownames(sc_data)
 
-# Scale and center gene expression values prior to PCA.
-sc_data <- ScaleData(sc_data)
+# Scale and center gene expression values prior to PCA
+# using block-wise scaling to reduce memory usage.
+sc_data <- ScaleData(
+  sc_data,
+  features   = VariableFeatures(sc_data),
+  block.size = 500,
+  verbose    = FALSE
+)
 
 
 # ----------------------------------------------------------
 # 6. Linear dimensionality reduction (PCA)
 # ----------------------------------------------------------
-# Perform PCA using the previously identified variable genes.
-sc_data <- RunPCA(sc_data)
+# Perform PCA using all genes.
+sc_data <- RunPCA(
+  sc_data,
+  features = VariableFeatures(sc_data),
+  npcs     = 50,
+  verbose  = FALSE
+)
 
 # Quantify variance explained by each principal component.
 pct  <- sc_data[["pca"]]@stdev / sum(sc_data[["pca"]]@stdev) * 100
@@ -112,16 +134,14 @@ cumu <- cumsum(pct)
 # First PC where cumulative variance > 90% AND individual
 # PC contributes < 5% variance.
 co1 <- which(cumu > 90 & pct < 5)[1]
-co1
 
 # Criterion 2:
 # Last PC where change in variance between consecutive PCs
 # is greater than 0.1%.
 co2 <- sort(
-  which((pct[1:(length(pct) - 1)] - pct[2:length(pct)]) > 0.1),
+  which((pct[-length(pct)] - pct[-1]) > 0.1),
   decreasing = TRUE
 )[1] + 1
-co2
 
 # Final number of informative PCs:
 # Conservative choice using the minimum of both criteria.
@@ -144,17 +164,14 @@ sc_data <- RunUMAP(sc_data, dims = 1:pcs)
 # ----------------------------------------------------------
 # 8. Visualization setup
 # ----------------------------------------------------------
-# Load plotting and layout helper libraries.
-library(cowplot)    # for legend extraction
-library(patchwork)  # for plot composition
-library(ggplot2)    # for ggsave()
+library(cowplot)
+library(patchwork)
+library(ggplot2)
 
 
 # ----------------------------------------------------------
 # 9. Dynamic color assignment for cell types
 # ----------------------------------------------------------
-# Automatically adapt colors to the identities present
-# after subsetting.
 cell_types <- levels(Idents(sc_data))
 
 cols_use <- Seurat::DiscretePalette(
