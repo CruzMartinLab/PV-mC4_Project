@@ -99,32 +99,23 @@ sc_data <- NormalizeData(
   scale.factor = 10000
 )
 
-# ----------------------------------------------------------
-# IMPORTANT MODIFICATION:
-# Use ALL genes as variable features (no HVG restriction)
-# ----------------------------------------------------------
-VariableFeatures(sc_data) <- rownames(sc_data)
-
-# Scale and center gene expression values prior to PCA
-# using block-wise scaling to reduce memory usage.
-sc_data <- ScaleData(
+# Identify highly variable genes using variance-stabilizing
+# transformation (VST).
+sc_data <- FindVariableFeatures(
   sc_data,
-  features   = VariableFeatures(sc_data),
-  block.size = 500,
-  verbose    = FALSE
+  selection.method = "vst",
+  nfeatures = 2000
 )
+
+# Scale and center gene expression values prior to PCA.
+sc_data <- ScaleData(sc_data)
 
 
 # ----------------------------------------------------------
 # 6. Linear dimensionality reduction (PCA)
 # ----------------------------------------------------------
-# Perform PCA using all genes.
-sc_data <- RunPCA(
-  sc_data,
-  features = VariableFeatures(sc_data),
-  npcs     = 50,
-  verbose  = FALSE
-)
+# Perform PCA using the previously identified variable genes.
+sc_data <- RunPCA(sc_data)
 
 # Quantify variance explained by each principal component.
 pct  <- sc_data[["pca"]]@stdev / sum(sc_data[["pca"]]@stdev) * 100
@@ -139,7 +130,7 @@ co1 <- which(cumu > 90 & pct < 5)[1]
 # Last PC where change in variance between consecutive PCs
 # is greater than 0.1%.
 co2 <- sort(
-  which((pct[-length(pct)] - pct[-1]) > 0.1),
+  which((pct[1:(length(pct) - 1)] - pct[2:length(pct)]) > 0.1),
   decreasing = TRUE
 )[1] + 1
 
@@ -238,3 +229,10 @@ ggsave(
 
 # Extract legend
 legend <- get_legend(umap_plot)
+ggsave(
+  filename = "legend.png",
+  plot = legend,
+  width = 3,
+  height = 4,
+  dpi = 300
+)
