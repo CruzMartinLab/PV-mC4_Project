@@ -62,7 +62,7 @@ sc_data <- subset(
 # 4. Set and clean cell identity labels
 # ----------------------------------------------------------
 # Drop unused factor levels created by subsetting.
-sc_data$subclass_label <- droplevels(sc_data$subclass_label)
+sc_data$subclass_label <- droplevels(factor(sc_data$subclass_label))
 
 # Set subclass labels as the active identity class.
 # This allows easy grouping, coloring, and downstream analyses.
