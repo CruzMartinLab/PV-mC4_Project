@@ -175,13 +175,15 @@ heatmapPearson <- function(correlations) {
 # ----------------------------------------------------------
 # Calculate Pearson correlation coefficients on log2-
 # transformed normalized expression values for selected DEGs.
+expr <- GetAssayData(
+  sc_data,
+  assay = "RNA",
+  layer = "data"
+)[topDEGs_list, ]
+
 correlations_DEGs_log <- cor(
-  method = "pearson",
-  log2(
-    t(as.matrix(
-      sc_data@assays[["RNA"]]@data[topDEGs_list, ]
-    )) + 1
-  )
+  log2(t(as.matrix(expr)) + 1),
+  method = "pearson"
 )
 
 
